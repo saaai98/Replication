@@ -1,232 +1,140 @@
-# MLOps using Amazon SageMaker and GitHub Actions
-This is an example of MLOps implementation using Amazon SageMaker and GitHub Actions.
+## Layout of the SageMaker Project Template
 
-In this example, we will automate a model-build pipeline that includes steps for data preparation, model training, model evaluation, and registration of that model in the SageMaker Model Registry. The resulting trained ML model is deployed from the model registry to staging and production environments upon the approval.
+The template provides a starting point for bringing your SageMaker Pipeline development to production.
 
-
-## Architecture Overview
-![Amazon SageMaker and GitHub Actions Architecture](/img/Amazon-SageMaker-GitHub-Actions-Architecture.png)
-
-
-## Prerequisites
-The followings are prerequisites to completing the steps in this example:
-
-
-### Set up a CodeStar Connection
-If you don't have a CodeStar Connection to your GitHub account already, follow this [link](https://docs.aws.amazon.com/dtconsole/latest/userguide/connections-create-github.html) to create one.
-
-Your CodeStar Connection ARN will look like this:
 ```
-arn:aws:codestar-connections:us-west-2:account_id:connection/aEXAMPLE-8aad-4d5d-8878-dfcab0bc441f
-```
-In the above, `aEXAMPLE-8aad-4d5d-8878-dfcab0bc441f` is the unique Id for this connection. We'll be using this Id when we create our SageMaker project later in this example.
-
-### Set up Secret Access Keys for GitHub Token
-We need to create a secret in AWS secret Manager that holds our GitHub personal access token. If you do not have a personal access token for GitHub, you need to create one following the instructions [here](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token).
-
-> Note: You can create either classic or fine-grained access token. However, make sure the token has access to the *Contents* and *Actions* (workflows, runs and artifacts) for that repository.
-
-Then, go to the AWS Secrets Manager, click on Store a new secret, select “Other type of secret” for Choose Secret type, then give a name to your secret in the “key” and add your personal access token to its associated “value”- click next, type a name for your Secret name and click next and then store.
-
-### Create an IAM user for GitHub Actions
-In order to give permission to the GitHub Actions to deploy the SageMaker endpoints in your AWS environment, you need to create an IAM user.
-Use `iam/GithubActionsMLOpsExecutionPolicy.json` to provide enough permission to this user to deploy your endpoints.
-
-Next, generate an *Access Key* for this user. You'll use this key in the next step when you set up your GitHub Secrets.
-
-
-### GitHub Setup
-The following are the steps to prepare your github account to run this example.
-
-
-#### a) GitHub Repository
-You can reuse an existing github repo for this example. However, it's easier if you create a new repository. This repository is going to contain all the source code for both sagemaker pipeline build and deployments.
-
-Copy the contents of the `seedcode` directory in the root of your github repository. e.g. `.github` directory should be under the root of your github repo.
-
-
-#### b) Set up a GitHub Secrets containing your IAM user access key
-Got your GitHub repository - on the top of the repository, select Settings - then in the security section go to the Secrets and variables and choose Actions. Choose the New repository secret:
-
-> Note: This is the Access Key for the IAM user which you just created in the previous step.
-
-1. Add the name AWS_ACCESS_KEY_ID and for Secret that you created for the IAM user in the [Create an IAM user for GitHub Actions](https://github.com/aws-samples/mlops-sagemaker-github-actions#create-an-iam-user-for-github-actions) step add your AWS_ACCESS_Key, click on add secret.
-2. repeat the same process for AWS_SECRET_ACCESS_KEY
-
-
-#### c) GitHub Environments
-In order to create a manual approval step in our deployment pipelines, we use [GitHub Environments](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment).
-
-1. Go to the Settings>Environments menu of your github repository and create a new environment called `production`.
-2. In the *Environment protection rules* select the `Required reviewers` and then add the reviewers. You can choose yourself for this example.
-
->Note: Environment feature is not available in some types of GitHub plans. Check the documentation [here](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment).
-
-
-### Deploy the Lambda function
-Simply zip the `lambda_function.py` and upload it to an S3 bucket.
-
-```sh
-cd lambda_functions/lambda_github_workflow_trigger
-zip lambda-github-workflow-trigger.zip lambda_function.py
-```
-Then upload the `lambda-github-workflow-trigger.zip` to a bucket which can be accessed later on by the ServiceCatalog.
-
-#### Create an AWS Lambda layer
-Now, let's create a Lambda layer for the dependencies of the lambda_function which we just uploaded.
-
-Create a python virtual environment and install the dependencies.
-```sh
-mkdir lambda_layer
-cd lambda_layer
-python3 -m venv .env
-source .env/bin/activate
-pip install pygithub
-deactivate
-```
-Now let's create our zip file.
-```sh
-mv .env/lib/python3.9/site-packages/ python
-zip -r layer.zip python
+├── build_deployment_configs.py
+├── CONTRIBUTING.md
+├── deploy_stack.py
+├── endpoint-config-template.yml
+├── img
+│   └── pipeline-full.png
+├── LICENSE
+├── pipelines
+│   ├── abalone
+│   │   ├── evaluate.py
+│   │   ├── __init__.py
+│   │   ├── pipeline.py
+│   │   └── preprocess.py
+│   ├── get_pipeline_definition.py
+│   ├── __init__.py
+│   ├── run_pipeline.py
+│   ├── _utils.py
+│   └── __version__.py
+├── prod-config.json
+├── README.md
+├── sagemaker-pipelines-project.ipynb
+├── setup.cfg
+├── setup.py
+├── staging-config.json
+├── tests
+│   ├── test_endpoints.py
+│   └── test_pipelines.py
+└── tox.ini
 ```
 
-Publish the layer to AWS.
-```sh
-aws lambda publish-layer-version --layer-name python39-github-arm64 \
-    --description "Python3.9 pygithub" \
-    --license-info "MIT" \
-    --zip-file fileb://layer.zip \
-    --compatible-runtimes python3.9 \
-    --compatible-architectures "arm64"
+## Start here
+This is a sample code repository that demonstrates how you can organize your code for an ML business solution. This code repository is created as part of creating a Project in SageMaker. 
+
+In this example, we are solving the abalone age prediction problem using the abalone dataset (see below for more on the dataset). The following section provides an overview of how the code is organized and what you need to modify. In particular, `pipelines/pipelines.py` contains the core of the business logic for this problem. It has the code to express the ML steps involved in generating an ML model. You will also find the code for that supports preprocessing and evaluation steps in `preprocess.py` and `evaluate.py` files respectively.
+
+Once you understand the code structure described below, you can inspect the code and you can start customizing it for your own business case. This is only sample code, and you own this repository for your business use case. Please go ahead, modify the files, commit them and see the changes kick off the SageMaker pipelines in the CICD system.
+
+You can also use the `sagemaker-pipelines-project.ipynb` notebook to experiment from SageMaker Studio before you are ready to checkin your code.
+
+A description of some of the artifacts is provided below:
+<br/><br/>
+Your codebuild execution instructions. This file contains the instructions needed to kick off an execution of the SageMaker Pipeline in the CICD system (via CodePipeline). You will see that this file has the fields definined for naming the Pipeline, ModelPackageGroup etc. You can customize them as required.
+
 ```
-Now, all of your functions can refer to this layer to satisfy their dependencies.
-
-
-For further reading on Lambda Layer, visit this [link](https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html).
-
-
-### Create a Custom Project Template in SageMaker
-At this stage we use the provided CloudFormation template to create a ServiceCatalog which helps us to create custom projects in SageMaker.
-
-Before creating the ServiceCatalog, in the `template.yml` file, change the `S3Bucket` to your bucket which you have uploaded the lambda zip file.
-
-```yaml
-GitHubWorkflowTriggerLambda:
-    ...
-    Code:
-        S3Bucket: <your bucket>
-        S3Key: lambda-github-workflow-trigger.zip
-    ...
+.github/workflows/build.yml
 ```
-Create or reuse your SageMaker Domain for the following steps. If you don't have a domain, use the instruction [here](https://docs.aws.amazon.com/sagemaker/latest/dg/onboard-quick-start.html) to create your domain with a *Quick Setup*.
+
+<br/><br/>
+Your pipeline artifacts, which includes a pipeline module defining the required `get_pipeline` method that returns an instance of a SageMaker pipeline, a preprocessing script that is used in feature engineering, and a model evaluation script to measure the Mean Squared Error of the model that's trained by the pipeline. This is the core business logic, and if you want to create your own folder, you can do so, and implement the `get_pipeline` interface as illustrated here.
 
 
-If the SageMaker-provided templates do not meet your needs (for example, you want to have more complex orchestration in the CodePipeline with multiple stages or custom approval steps), create your own templates.
-We recommend starting by using SageMaker-provided templates to understand how to organize your code and resources and build on top of it. https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-projects-templates-custom.html
+```
+|-- pipelines
+|   |-- abalone
+|   |   |-- evaluate.py
+|   |   |-- __init__.py
+|   |   |-- pipeline.py
+|   |   `-- preprocess.py
 
-To do this, after you enable administrator access to the SageMaker templates,
+```
+<br/><br/>
+Utility modules for getting pipeline definition jsons and running pipelines (you do not typically need to modify these):
 
- 1. log in to the https://console.aws.amazon.com/servicecatalog/
+```
+|-- pipelines
+|   |-- get_pipeline_definition.py
+|   |-- __init__.py
+|   |-- run_pipeline.py
+|   |-- _utils.py
+|   `-- __version__.py
+```
+<br/><br/>
+Python package artifacts:
+```
+|-- setup.cfg
+|-- setup.py
+```
+<br/><br/>
+A stubbed testing module for testing your pipeline as you develop:
+```
+|-- tests
+|   `-- test_pipelines.py
+```
+<br/><br/>
+The `tox` testing framework configuration:
+```
+tox.ini
+```
 
- 2. On the AWS **Service Catalog** console, under Administration, choose **Portfolios**.
+## Deploy your model
 
- 3. Choose Create a new portfolio.
+This is a sample code repository for demonstrating how you can organize your code for deploying an realtime inference Endpoint infrastructure. This code repository is created as part of creating a Project in SageMaker. 
 
- 4. Name the portfolio **SageMaker Organization Templates**.
+This code repository has the code to find the latest approved ModelPackage for the associated ModelPackageGroup and automaticaly deploy it to the Endpoint on detecting a change (`build.py`). This code repository also defines the CloudFormation template which defines the Endpoints as infrastructure. It also has configuration files associated with `staging` and `prod` stages. 
 
- 5. Download the [**template.yml**](https://github.com/aws-samples/mlops-sagemaker-github-actions/blob/main/project/template.yml) to your computer. This template is a Cloud Formation tempalte that provisions all the CI/CD resources we need as configuarion and infrustruce as code. You can study the template in more details to see what resources are deployed as part of it. This template has been customised to integrate with GitHub and GitHub actions.
+Upon triggering a deployment, the CodePipeline pipeline will deploy 2 Endpoints - `staging` and `prod`. After the first deployment is completed, the CodePipeline waits for a manual approval step for promotion to the prod stage.
 
- 6. Choose the new portfolio.
+You own this code and you can modify this template to change as you need it, add additional tests for your custom validation. 
 
- 7. Choose **Upload a new product**.
+A description of some of the artifacts is provided below:
+The GitHub Actions workflow to build and deploy Endpoints.
 
- 8. For Product name¸ enter a name for your template. We chose **build-deploy-github**.
+```
+.github/workflows/deploy.yml
+```
 
- 9. For Description, enter **my custom build and deploy template**.
+```
+build.py
+```
+ - this python file contains code to get the latest approve package arn and exports staging and configuration files. This is invoked from the Build stage.
 
- 10. For Owner, enter your **name**.
+`endpoint-config-template.yml`
+ - this CloudFormation template file is packaged by the build step in the CodePipeline and is deployed in different stages.
 
- 11. Under Version details, for Method, choose **Use a template file**.
+`staging-config.json`
+ - this configuration file is used to customize `staging` stage in the pipeline. You can configure the instance type, instance count here.
 
- 12. Choose **Upload a template**.
+`prod-config.json`
+ - this configuration file is used to customize `prod` stage in the pipeline. You can configure the instance type, instance count here.
 
- 13. Upload the template you downloaded.
-
- 14. For Version title, choose **1.0**.
-
- 15. Choose Review.
-
- 16. Review your settings and choose **Create product**.
-
- 17. Choose Refresh to list the new product.
-
- 18. Choose the product you just created.
-
- 19. On the Tags tab, add the following tag to the product:
-
-  - Key – **sagemaker:studio-visibility**
-  - Value – **true**
-
- 20. Back in the portfolio details, you see something similar to the following screenshot (with different IDs). ![alt text](/img/img1.png)
-
- 21. On the Constraints tab, choose **Create constraint**.
-
- 22. For Product, choose build-deploy-github (the product you just created).
-
- 23. For Constraint type, choose Launch.
-
- 24. Under Launch Constraint, for Method, choose Select IAM role.
-
- 25. Choose **AmazonSageMakerServiceCatalogProductsLaunchRole**.
-
- 26. Choose Create.
-
- 27. On the Groups, roles, and users tab, choose Add groups, roles, users.
-
- 28. On the **Roles** tab, select the **role** you used when configuring your SageMaker Studio domain. This is where the SageMaker Domain Role can be found. ![alt text](/img/img2.png)
-
- 29. Choose Add access.
+`test\test.py`
+  - this python file contains code to describe and invoke the staging endpoint. You can customize to add more tests here.
 
 
-## Launch your project
+## Dataset for the Example Abalone Pipeline
 
-In the previous sections, you prepared the Custom MLOps project environment. Now, let's create a project using this template.
+The dataset used is the [UCI Machine Learning Abalone Dataset](https://archive.ics.uci.edu/ml/datasets/abalone) [1]. The aim for this task is to determine the age of an abalone (a kind of shellfish) from its physical measurements. At the core, it's a regression problem. 
+ 
+The dataset contains several features - length (longest shell measurement), diameter (diameter perpendicular to length), height (height with meat in the shell), whole_weight (weight of whole abalone), shucked_weight (weight of meat), viscera_weight (gut weight after bleeding), shell_weight (weight after being dried), sex ('M', 'F', 'I' where 'I' is Infant), as well as rings (integer).
 
-1. In the aws console, navigate to Amazon SageMaker Domains
-2. Choose the domain that you want to create this project in.
-3. From the *Launch* menu choose *Studio*. You'll be redirected to the SageMaker Studio environment.
-4. In the Studio, from the left menu, under the *Deployments*, choose *Projects*
-5. Select *Create Project*.
-6. At the top of the list of templates, Choose *Organization templates*.
-7. If you have gone through all the previous steps successfully, you should be able to see a new custom project template named *build-deploy-github*. Select that template and click on *Select Project Template*.
-8. Besides to the Name and Description, you need to provide the following details:
-    - **Code Repository Info**: This is the owner of your GitHub Repository, e.g. for a repository at `https://github.com/pooyavahidi/my-repo`, the owner would be `pooyavahidi`.
+The number of rings turns out to be a good approximation for age (age is rings + 1.5). However, to obtain this number requires cutting the shell through the cone, staining the section, and counting the number of rings through a microscope -- a time-consuming task. However, the other physical measurements are easier to determine. We use the dataset to build a predictive model of the variable rings through these other physical measurements.
 
-    - **GitHub Repository Name**: This is the name of the repository which you copied the *seedcode* in. It would be just the name of the repo. e.g. in `https://github.com/pooyavahidi/my-repo`, the repo is `my-repo`.
+We'll upload the data to a bucket we own. But first we gather some constants we can use later throughout the notebook.
 
-    - **Codestar connection unique id**: This is the unique Id of the CodeStar connection which you created in the previous steps.
-    - **Name of the secret in the Secrets Manager which stores GitHub token**: This is the name of the *Secret* in the Secrets Manager which you have created and stored the GitHub Token.
-
-    - **GitHub workflow file for deployment. e.g. deploy.yml**: This is the name of the GitHub workflow file (at `.github/workflows/deploy.yml` location) where you have the deployment instructions. For this example, you can keep it as default which is `deploy.yml`
-
-9.  Click *Create Project*.
-10. After creating your project, make sure you update the `AWS_REGION` and `SAGEMAKER_PROJECT_NAME` environment variables in your GitHub Workflow files accordingly. Workflow files are in your GitHub repo (copied from seedcode), inside `.github/workflows` directory. Make sure you update both build.yml and deploy.yml files.
-
-    ```yaml
-        ...
-        env:
-          AWS_REGION: <region>
-          SAGEMAKER_PROJECT_NAME: <your project name>
-        ...
-    ```
-
-Now your environment is ready to go! You can start by exploring the `pipelines` directory, make changes and push those changes to your github repository, and see how all the steps of build and then deploy are automated.
-
-## Security
-
-See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
-
-## License
-
-This library is licensed under the MIT-0 License. See the LICENSE file.
-
+[1] Dua, D. and Graff, C. (2019). [UCI Machine Learning Repository](http://archive.ics.uci.edu/ml). Irvine, CA: University of California, School of Information and Computer Science.
